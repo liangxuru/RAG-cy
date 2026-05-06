@@ -1,9 +1,5 @@
 # RAG-cy 企业知识库系统
 
-**Read more about this project:**
-- Russian: https://habr.com/ru/articles/893356/
-- English: https://abdullin.com/ilya/how-to-build-best-rag/
-
 这是一个基于 Qwen-Turbo 的企业知识库 RAG 问答系统，用于分析和回答关于公司财报的问题。
 
 ## 项目架构
@@ -44,15 +40,15 @@ flowchart TD
 
 ## 核心技术栈
 
-| 分类 | 技术 |
-|------|------|
-| 语言 | Python |
-| 大模型 | Qwen-Turbo (DashScope) |
-| 向量数据库 | FAISS |
-| 传统检索 | BM25 |
-| PDF解析 | docling / Mineru |
-| Web界面 | Streamlit |
-| API支持 | OpenAI, DashScope |
+| 分类    | 技术                     |
+| ----- | ---------------------- |
+| 语言    | Python                 |
+| 大模型   | Qwen-Turbo (DashScope) |
+| 向量数据库 | FAISS                  |
+| 传统检索  | BM25                   |
+| PDF解析 | docling / Mineru       |
+| Web界面 | Streamlit              |
+| API支持 | OpenAI, DashScope      |
 
 ## 处理流程
 
@@ -136,15 +132,15 @@ RAG-cy/
 
 ### 模块功能
 
-1. **pdf_parsing.py** - 调用Docling工具对PDF年报进行结构化解析
-2. **parsed_reports_merging.py** - 将PDF解析结果规整为结构化列表，可导出为markdown
-3. **text_splitter.py** - 将报告文本按Token数分块，支持表格特殊处理
+1. **pdf\_parsing.py** - 调用MinerU工具对PDF年报进行结构化解析
+2. **parsed\_reports\_merging.py** - 将PDF解析结果规整为结构化列表，可导出为markdown
+3. **text\_splitter.py** - 将报告文本按Token数分块，支持表格特殊处理
 4. **ingestion.py** - 包含BM25索引和FAISS向量库构建
 5. **retrieval.py** - 实现BM25、向量、混合等多种检索器
-6. **questions_processing.py** - 问题处理与答案生成主逻辑
+6. **questions\_processing.py** - 问题处理与答案生成主逻辑
 7. **reranking.py** - 基于LLM的检索结果重排序
 8. **prompts.py** - 集中定义所有LLM提示词和结构化输出Schema
-9. **api_requests.py** - 与各类大模型API交互的统一封装
+9. **api\_requests.py** - 与各类大模型API交互的统一封装
 10. **pipeline.py** - 系统主流程调度模块
 
 ## 执行流程
