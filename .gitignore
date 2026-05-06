@@ -1,6 +1,5 @@
 # Data files - exclude large data directories
 data/
-docs/
 .cursorindexingignore
 
 # Byte-compiled / optimized / DLL files

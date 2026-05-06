@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pipeline.py 逻辑梳理</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --card: #ffffff;
+      --text: #1a1d26;
+      --muted: #5c6370;
+      --accent: #4f46e5;
+      --border: #e2e6ef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+    header {
+      background: linear-gradient(120deg, #312e81 0%, #6366f1 55%, #a855f7 100%);
+      color: #fff;
+      padding: 2.5rem 1.5rem 2rem;
+    }
+    header h1 { margin: 0 0 0.5rem; font-size: 1.75rem; font-weight: 650; }
+    header p { margin: 0; opacity: 0.92; max-width: 52rem; }
+    main { max-width: 52rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.35rem 1.5rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    h2 {
+      margin: 0 0 0.85rem;
+      font-size: 1.15rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.45rem;
+    }
+    h3 { margin: 1.25rem 0 0.5rem; font-size: 1rem; color: var(--text); }
+    p { margin: 0.5rem 0; color: var(--text); }
+    ul { margin: 0.35rem 0 0.5rem; padding-left: 1.25rem; color: var(--muted); }
+    li { margin: 0.25rem 0; }
+    code, .mono {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.88em;
+      background: #eef0f7;
+      padding: 0.12em 0.4em;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f2fa; font-weight: 600; }
+    .mermaid-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      padding: 0.75rem;
+      background: #fafbff;
+      border-radius: 8px;
+      border: 1px dashed var(--border);
+    }
+    .note {
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-left: 3px solid #c7d2fe;
+      padding-left: 0.85rem;
+      margin-top: 0.75rem;
+    }
+    .svg-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    footer {
+      text-align: center;
+      padding: 1rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><code>pipeline.py</code> 逻辑梳理</h1>
+    <p>企业知识库 RAG 项目中数据预处理与问答编排的主入口：路径配置、PDF/Markdown 处理、向量库构建与批量/单条问答。</p>
+  </header>
+  <main>
+    <section>
+      <h2>1. 文件角色概览</h2>
+      <p><code>pipeline.py</code> 将「数据目录 + 运行配置」封装为 <code>Pipeline</code> 类，对外提供从 PDF/Markdown 到分块、向量库、再到问题批处理或单问推理的一组方法。模块级常量 <code>PROJECT_ROOT</code> 指向仓库根目录；预置多组 <code>RunConfig</code>（如 <code>max_config</code>）供脚本或 UI 选用。</p>
+    </section>
+
+    <section>
+      <h2>2. 核心类型关系（Mermaid）</h2>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+classDiagram
+    class PipelineConfig {
+        +root_path
+        +subset_path
+        +questions_file_path
+        +pdf_reports_dir
+        +answers_file_path
+        +debug_data_path
+        +databases_path
+        +vector_db_dir
+        +documents_dir
+        +bm25_db_path
+        +reports_markdown_path
+    }
+    class RunConfig {
+        +use_serialized_tables
+        +parent_document_retrieval
+        +use_vector_dbs
+        +use_bm25_db
+        +llm_reranking
+        +llm_reranking_sample_size
+        +top_n_retrieval
+        +parallel_requests
+        +pipeline_details
+        +submission_file
+        +full_context
+        +api_provider
+        +answering_model
+        +config_suffix
+    }
+    class Pipeline {
+        +run_config
+        +paths
+        download_docling_models
+        parse_pdf_reports_parallel
+        export_reports_to_markdown
+        chunk_reports
+        create_vector_dbs
+        create_bm25_db
+        parse_pdf_reports
+        process_parsed_reports
+        process_questions
+        answer_single_question
+    }
+    Pipeline --> RunConfig
+    Pipeline --> PipelineConfig
+        </pre>
+      </div>
+      <p class="note"><code>PipelineConfig</code> 使用 <code>@dataclass</code> 装饰但手写 <code>__init__</code>，负责在 <code>root_path</code> 下拼出所有子路径；<code>serialized=True</code> 时 <code>databases</code> 目录名带后缀 <code>_ser_tab</code>，与表格序列化流程对齐。</p>
+    </section>
+
+    <section>
+      <h2>3. 数据流总览</h2>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+flowchart TB
+    subgraph ingest["数据摄入"]
+        A["PDF pdf_reports"]
+        B1["Docling parse_pdf_reports_parallel"]
+        B2["MinerU export_reports_to_markdown"]
+        C["Markdown 03_reports_markdown"]
+    end
+    subgraph index["索引构建"]
+        D["分块 JSON chunk_reports"]
+        E["向量库 create_vector_dbs"]
+        F["BM25 create_bm25_db"]
+    end
+    subgraph qa["问答"]
+        G["批量 process_questions"]
+        H["单条 answer_single_question"]
+    end
+    A --> B1
+    A --> B2
+    B1 --> C
+    B2 --> C
+    C --> D
+    D --> E
+    D --> F
+    E --> G
+    E --> H
+    F -.-> G
+        </pre>
+      </div>
+      <p>实际主流程（见 <code>__main__</code>）更常用：<strong>已有 Markdown</strong> → <code>chunk_reports</code> → <code>create_vector_dbs</code> → <code>process_questions</code>。<code>export_reports_to_markdown</code> 走外部 MinerU API，与 Docling 路径二选一或组合使用。</p>
+    </section>
+
+    <section>
+      <h2>4. <code>Pipeline</code> 方法调用顺序（典型脚本）</h2>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+flowchart LR
+    R["data/stock_data"] --> P["Pipeline init"]
+    P --> CH["chunk_reports"]
+    CH --> V["create_vector_dbs"]
+    V --> Q["process_questions"]
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. 初始化与辅助逻辑</h2>
+      <h3>构造 <code>Pipeline(root_path, …, run_config)</code></h3>
+      <ul>
+        <li><code>_initialize_paths</code>：用 <code>run_config.use_serialized_tables</code>、<code>config_suffix</code> 生成 <code>PipelineConfig</code>。</li>
+        <li><code>_convert_json_to_csv_if_needed</code>：若存在 <code>subset.json</code> 且无 <code>subset.csv</code>，则读 JSON 写 CSV，供后续模块使用公司元数据。</li>
+      </ul>
+      <h3><code>_get_next_available_filename</code></h3>
+      <p>批量写答案时避免覆盖：若 <code>answers*.json</code> 已存在，则依次尝试 <code>answers_01.json</code>、<code>answers_02.json</code> …</p>
+    </section>
+
+    <section>
+      <h2>6. <code>RunConfig</code> 主要字段</h2>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>parent_document_retrieval</code></td><td>是否启用父文档检索（大块上下文）</td></tr>
+          <tr><td><code>llm_reranking</code></td><td>检索结果是否经 LLM 重排</td></tr>
+          <tr><td><code>top_n_retrieval</code></td><td>检索返回条数</td></tr>
+          <tr><td><code>parallel_requests</code></td><td>批处理并发（注释中提示需控制以免触发 QPM 限流）</td></tr>
+          <tr><td><code>api_provider</code> / <code>answering_model</code></td><td>默认 <code>dashscope</code> + <code>qwen-turbo-latest</code></td></tr>
+          <tr><td><code>submission_file</code> / <code>pipeline_details</code></td><td>交给 <code>QuestionsProcessor.process_all_questions</code> 控制输出格式与说明字段</td></tr>
+          <tr><td><code>config_suffix</code></td><td>拼入答案文件名等，区分不同实验配置</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>7. 预置配置字典</h2>
+      <ul>
+        <li><code>preprocess_configs</code>：<code>ser_tab</code> / <code>no_ser_tab</code>，仅切换 <code>use_serialized_tables</code>。</li>
+        <li><code>base_config</code>：较高 <code>parallel_requests</code>，带 <code>config_suffix="_base"</code>。</li>
+        <li><code>parent_document_retrieval_config</code>：开启 PDR，GPT-4o，后缀 <code>_pdr</code>。</li>
+        <li><code>max_config</code>：PDR + 重排 + Qwen Turbo，后缀 <code>_qwen_turbo</code>（Streamlit 与 <code>__main__</code> 示例常用）。</li>
+        <li><code>configs</code>：将 <code>base</code>、<code>pdr</code>、<code>max</code> 映射到上述对象。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>8. 相对 <code>root_path</code> 的目录结构（示意 SVG）</h2>
+      <p>下列路径由 <code>PipelineConfig</code> 推导（与代码一致；Docling 解析输出路径在源码中部分被注释，若启用并行解析需自行恢复对应字段）。</p>
+      <div class="svg-wrap">
+        <svg xmlns="http://www.w3.org/2000/svg" width="420" height="340" viewBox="0 0 420 340" role="img" aria-label="目录结构">
+          <defs>
+            <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#6366f1"/>
+              <stop offset="100%" style="stop-color:#a855f7"/>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="404" height="324" rx="12" fill="#fff" stroke="#e2e6ef"/>
+          <text x="24" y="38" font-size="15" font-weight="700" fill="#312e81">root_path（如 data/stock_data）</text>
+          <line x1="24" y1="48" x2="396" y2="48" stroke="#e2e6ef"/>
+          <g font-family="Consolas, monospace" font-size="12" fill="#334155">
+            <text x="32" y="78">subset.csv / subset.json</text>
+            <text x="32" y="98">questions.json</text>
+            <text x="32" y="118">pdf_reports/*.pdf</text>
+            <text x="32" y="138">answers{suffix}.json（输出）</text>
+            <text x="32" y="168" font-weight="600" fill="#4f46e5">debug_data/</text>
+            <text x="48" y="192">03_reports_markdown…/*.md</text>
+            <text x="32" y="222" font-weight="600" fill="#4f46e5">databases[ _ser_tab ]/</text>
+            <text x="48" y="246">chunked_reports/（分块 JSON）</text>
+            <text x="48" y="268">vector_dbs/</text>
+            <text x="48" y="290">bm25_dbs/</text>
+          </g>
+          <rect x="24" y="308" width="372" height="22" rx="4" fill="#eef2ff"/>
+          <text x="30" y="323" font-size="11" fill="#5c6370">use_serialized_tables 为真时 databases 目录名带 _ser_tab</text>
+        </svg>
+      </div>
+    </section>
+
+    <section>
+      <h2>9. 与下游模块的衔接</h2>
+      <table>
+        <thead>
+          <tr><th>Pipeline 方法</th><th>主要依赖模块</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>download_docling_models</code></td><td><code>PDFParser</code> + 仓库内 <code>src/dummy_report.pdf</code></td></tr>
+          <tr><td><code>parse_pdf_reports_parallel</code></td><td><code>PDFParser.parse_and_export_parallel</code></td></tr>
+          <tr><td><code>export_reports_to_markdown</code></td><td><code>pdf_mineru</code>（异步任务 + 本地解压移动）</td></tr>
+          <tr><td><code>chunk_reports</code></td><td><code>TextSplitter.split_markdown_reports</code></td></tr>
+          <tr><td><code>create_vector_dbs</code></td><td><code>VectorDBIngestor</code></td></tr>
+          <tr><td><code>create_bm25_db</code></td><td><code>BM25Ingestor</code></td></tr>
+          <tr><td><code>process_questions</code> / <code>answer_single_question</code></td><td><code>QuestionsProcessor</code>（向量目录 + 文档目录 + API）</td></tr>
+        </tbody>
+      </table>
+      <p class="note">文件顶部还导入了 <code>PageTextPreparation</code>、<code>TableSerializer</code>，当前本文件中未直接调用，可能在其他脚本或历史流程中使用。</p>
+    </section>
+
+    <section>
+      <h2>10. 脚本入口 <code>if __name__ == "__main__"</code></h2>
+      <p>默认 <code>root_path = PROJECT_ROOT / "data" / "stock_data"</code>，使用 <code>max_config</code> 实例化 <code>Pipeline</code>，依次执行（注释可开关）：<code>chunk_reports</code> → <code>create_vector_dbs</code> → <code>process_questions</code>；<code>export_reports_to_markdown</code> 留给单文件 MinerU 转换。</p>
+    </section>
+  </main>
+  <footer>生成自仓库 <code>src/pipeline.py</code> · 可用浏览器直接打开本 HTML</footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "neutral",
+      securityLevel: "loose",
+      flowchart: { curve: "basis" }
+    });
+  </script>
+</body>
+</html>

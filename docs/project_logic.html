@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG-cy 项目逻辑笔记</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        .section {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        .section h2::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+            margin-right: 12px;
+        }
+        .subsection {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+        .subsection h3 {
+            color: #444;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+        .subsection p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .mermaid-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            overflow-x: auto;
+        }
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .tech-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .file-tree {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: #333;
+            padding-left: 20px;
+        }
+        .file-tree ul {
+            list-style: none;
+        }
+        .file-tree li {
+            position: relative;
+            padding: 4px 0;
+        }
+        .file-tree li::before {
+            content: '├─';
+            position: absolute;
+            left: -16px;
+        }
+        .file-tree li:last-child::before {
+            content: '└─';
+        }
+        .flow-chart {
+            text-align: center;
+        }
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 15px;
+        }
+        .info-box p {
+            color: #2980b9;
+            font-size: 14px;
+            margin: 0;
+        }
+        .warning-box {
+            background: #fef5e7;
+            border-left: 4px solid #f39c12;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 15px;
+        }
+        .warning-box p {
+            color: #d68910;
+            font-size: 14px;
+            margin: 0;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose'
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 RAG-cy 项目逻辑笔记</h1>
+            <p>企业知识库 RAG 系统 - 基于 Qwen-Turbo 的财报分析问答系统</p>
+        </div>
+
+        <div class="section">
+            <h2>项目架构概览</h2>
+            <div class="mermaid-container">
+                <div class="mermaid">
+flowchart TD
+    subgraph 数据层
+        A[PDF财报文件] --> B[PDF解析模块]
+        B --> C[文本分块]
+        C --> D[向量嵌入]
+        C --> E[BM25索引]
+        D --> F[FAISS向量库]
+    end
+    
+    subgraph 检索层
+        G[用户问题] --> H[问题处理]
+        H --> I[向量检索]
+        H --> J[BM25检索]
+        I --> K[混合排序]
+        J --> K
+        K --> L{LLM重排?}
+        L -->|是| M[Reranking]
+        L -->|否| N[Top-K结果]
+        M --> N
+    end
+    
+    subgraph 生成层
+        N --> O[Prompt构建]
+        O --> P[Qwen-Turbo API]
+        P --> Q[答案生成]
+    end
+    
+    subgraph 展示层
+        Q --> R[Streamlit UI]
+        G --> R
+    end
+    
+    A -.->|data/stock_data/pdf_reports| B
+    F -.->|data/stock_data/databases/vector_dbs| I
+    E -.->|data/stock_data/databases/bm25_dbs| J
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style R fill:#9f9,stroke:#333,stroke-width:2px
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>核心模块架构</h2>
+            <div class="subsection">
+                <h3>文件结构</h3>
+                <div class="file-tree">
+                    <ul>
+                        <li>RAG-cy/
+                            <ul>
+                                <li>src/
+                                    <ul>
+                                        <li>pipeline.py - 主流程控制器</li>
+                                        <li>pdf_parsing.py - PDF解析（docling）</li>
+                                        <li>pdf_mineru.py - PDF解析（mineru）</li>
+                                        <li>text_splitter.py - 文本分块</li>
+                                        <li>ingestion.py - 索引构建（FAISS/BM25）</li>
+                                        <li>retrieval.py - 检索模块</li>
+                                        <li>questions_processing.py - 问答处理</li>
+                                        <li>prompts.py - 提示词模板</li>
+                                        <li>reranking.py - LLM重排</li>
+                                        <li>api_requests.py - API请求</li>
+                                    </ul>
+                                </li>
+                                <li>data/stock_data/
+                                    <ul>
+                                        <li>pdf_reports/ - 原始PDF</li>
+                                        <li>debug_data/ - 中间处理结果</li>
+                                        <li>databases/ - 索引存储</li>
+                                    </ul>
+                                </li>
+                                <li>app_streamlit.py - Web界面</li>
+                                <li>main.py - 命令行入口</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>数据处理流程</h2>
+            <div class="mermaid-container">
+                <div class="mermaid">
+flowchart LR
+    A[PDF文件] -->|pdf_parsing.py| B[结构化解析]
+    B --> C[表格提取]
+    B --> D[文本提取]
+    C -->|tables_serialization.py| E[表格序列化]
+    D -->|parsed_reports_merging.py| F[文本合并]
+    F -->|text_splitter.py| G[文本分块]
+    E --> G
+    G -->|ingestion.py| H[DashScope Embedding]
+    H --> I[FAISS向量库]
+    G -->|ingestion.py| J[BM25索引]
+    
+    style A fill:#4285F4,color:#fff
+    style I fill:#EA4335,color:#fff
+    style J fill:#FBBC05,color:#333
+                </div>
+            </div>
+            <div class="info-box">
+                <p><strong>关键技术点：</strong>采用双检索策略（向量+BM25），提高召回率和准确性</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>检索流程</h2>
+            <div class="mermaid-container">
+                <div class="mermaid">
+sequenceDiagram
+    participant User as 用户
+    participant UI as Streamlit
+    participant QP as QuestionsProcessor
+    participant Retriever as HybridRetriever
+    participant BM25 as BM25Retriever
+    participant Vector as VectorRetriever
+    participant Reranker as LLMReranker
+    participant LLM as Qwen-Turbo
+
+    User->>UI: 输入问题
+    UI->>QP: process_questions()
+    QP->>Retriever: hybrid_retrieve(query)
+    Retriever->>BM25: retrieve(query)
+    BM25-->>Retriever: BM25结果
+    Retriever->>Vector: retrieve(query)
+    Vector-->>Retriever: 向量检索结果
+    Retriever->>Retriever: 混合排序融合
+    Retriever-->>QP: 初步候选集
+    
+    alt 启用LLM重排
+        QP->>Reranker: rerank(chunks, query)
+        Reranker->>LLM: 调用重排API
+        LLM-->>Reranker: 排序分数
+        Reranker-->>QP: 重排后的结果
+    end
+    
+    QP->>QP: 构建Prompt上下文
+    QP->>LLM: 调用问答API
+    LLM-->>QP: 生成答案
+    QP-->>UI: 返回答案
+    UI-->>User: 展示结果
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>核心类与方法</h2>
+            <div class="subsection">
+                <h3>PipelineConfig (pipeline.py)</h3>
+                <div class="code-block">
+class PipelineConfig:
+    def __init__(self, root_path, subset_name, questions_file_name, ...):
+        # 路径配置
+        self.subset_path = root_path / subset_name      # 公司列表
+        self.questions_file_path = root_path / questions_file_name
+        self.pdf_reports_dir = root_path / pdf_reports_dir_name
+        self.vector_db_dir = self.databases_path / "vector_dbs"
+        self.documents_dir = self.databases_path / "chunked_reports"
+        self.bm25_db_path = self.databases_path / "bm25_dbs"
+                </div>
+            </div>
+            
+            <div class="subsection">
+                <h3>VectorDBIngestor (ingestion.py)</h3>
+                <div class="code-block">
+class VectorDBIngestor:
+    def process_reports(self, input_dir, output_dir):
+        # 遍历JSON报告 -> 提取文本块 -> 生成嵌入 -> 构建FAISS索引
+        for report_path in all_report_paths:
+            report_data = json.load(f)
+            text_chunks = [chunk['text'] for chunk in report_data['content']['chunks']]
+            embeddings = self.get_embeddings(text_chunks)  # DashScope API
+            self.build_faiss_index(embeddings, output_file)
+                </div>
+            </div>
+            
+            <div class="subsection">
+                <h3>HybridRetriever (retrieval.py)</h3>
+                <div class="code-block">
+class HybridRetriever:
+    def __init__(self, vector_db_dir, bm25_db_dir, documents_dir):
+        self.vector_retriever = VectorRetriever(vector_db_dir, documents_dir)
+        self.bm25_retriever = BM25Retriever(bm25_db_dir, documents_dir)
+    
+    def hybrid_retrieve(self, company_name, query, top_n=10):
+        # 并行执行两种检索
+        vector_results = self.vector_retriever.retrieve(...)
+        bm25_results = self.bm25_retriever.retrieve(...)
+        # 融合排序（加权或Reciprocal Rank Fusion）
+        return self.fuse_results(vector_results, bm25_results, top_n)
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>技术栈</h2>
+            <div class="tech-stack">
+                <span class="tech-tag">Python</span>
+                <span class="tech-tag">DashScope API</span>
+                <span class="tech-tag">Qwen-Turbo</span>
+                <span class="tech-tag">FAISS</span>
+                <span class="tech-tag">BM25</span>
+                <span class="tech-tag">docling</span>
+                <span class="tech-tag">Streamlit</span>
+                <span class="tech-tag">OpenAI API</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>关键配置与参数</h2>
+            <div class="subsection">
+                <h3>检索参数 (QuestionsProcessor)</h3>
+                <div class="code-block">
+{
+    "top_n_retrieval": 10,        # 检索返回数量
+    "llm_reranking": true,        # 是否启用LLM重排
+    "llm_reranking_sample_size": 5,  # 重排候选数
+    "parent_document_retrieval": false,  # 父文档检索
+    "parallel_requests": 10,      # 并发请求数
+    "api_provider": "dashscope",  # dashscope | openai
+    "answering_model": "qwen-turbo-latest"
+}
+                </div>
+            </div>
+            <div class="warning-box">
+                <p><strong>注意：</strong>Qwen-Turbo API限流为每分钟500次调用（QPM），每分钟Token消耗不超过500,000</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>数据流向图</h2>
+            <div class="mermaid-container">
+                <div class="mermaid">
+graph TD
+    subgraph 输入层
+        A[PDF财报]
+        B[问题集JSON]
+        C[公司列表CSV]
+    end
+    
+    subgraph 处理层
+        D[PDF解析]
+        E[文本分块]
+        F[嵌入生成]
+        G[索引构建]
+        H[问题处理]
+        I[检索匹配]
+        J[答案生成]
+    end
+    
+    subgraph 存储层
+        K[chunked_reports JSON]
+        L[FAISS向量库]
+        M[BM25索引]
+        N[answers JSON]
+    end
+    
+    subgraph 输出层
+        O[Streamlit界面]
+        P[JSON结果文件]
+    end
+    
+    A --> D --> E --> K
+    E --> F --> G --> L
+    E --> G --> M
+    B --> H --> I
+    C --> H
+    K --> I
+    L --> I
+    M --> I
+    I --> J --> N
+    J --> O
+    N --> O
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>执行流程时序</h2>
+            <div class="mermaid-container">
+                <div class="mermaid">
+timeline
+    title RAG系统完整执行流程
+    section 数据准备阶段
+        "Step 1": PDF解析 (pdf_parsing.py)
+        "Step 2": 文本合并 (parsed_reports_merging.py)
+        "Step 3": 文本分块 (text_splitter.py)
+        "Step 4": 索引构建 (ingestion.py)
+    
+    section 问答阶段
+        "Step 5": 问题加载 (questions_processing.py)
+        "Step 6": 混合检索 (retrieval.py)
+        "Step 7": LLM重排 (reranking.py)
+        "Step 8": Prompt构建 (prompts.py)
+        "Step 9": LLM调用 (api_requests.py)
+        "Step 10": 结果保存
+    
+    section 交互阶段
+        "Step 11": Streamlit展示
+        "Step 12": 用户问答交互
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
