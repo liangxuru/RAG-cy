@@ -1,108 +1,220 @@
-# RAG Challenge Winner Solution
+# RAG-cy 企业知识库系统
 
 **Read more about this project:**
 - Russian: https://habr.com/ru/articles/893356/
 - English: https://abdullin.com/ilya/how-to-build-best-rag/
 
-This repository contains the winning solution for both prize nominations in the RAG Challenge competition. The system achieved state-of-the-art results in answering questions about company annual reports using a combination of:
+这是一个基于 Qwen-Turbo 的企业知识库 RAG 问答系统，用于分析和回答关于公司财报的问题。
 
-- Custom PDF parsing with Mineru
-- Vector search with parent document retrieval
-- LLM reranking for improved context relevance
-- Structured output prompting with chain-of-thought reasoning
-- Query routing for multi-company comparisons
+## 项目架构
 
-- Step1，LLM本地化（Qwen3-32B），embedding本地化（qwen3-4b）
-- Step2，mineru 对pdf进行理解 => json, .md
-- Step3，进行chunk, 转化成 embedding => faiss
-- Step4，混合召回：向量 + BM25 + Rerank：本地化的Rerank（可选）
-- Step5，LLM + Relevant chunks => answer
+```mermaid
+flowchart TD
+    subgraph 数据层
+        A[PDF财报文件] --> B[PDF解析模块]
+        B --> C[文本分块]
+        C --> D[向量嵌入]
+        C --> E[BM25索引]
+        D --> F[FAISS向量库]
+    end
+    
+    subgraph 检索层
+        G[用户问题] --> H[问题处理]
+        H --> I[向量检索]
+        H --> J[BM25检索]
+        I --> K[混合排序]
+        J --> K
+        K --> L{LLM重排?}
+        L -->|是| M[Reranking]
+        L -->|否| N[Top-K结果]
+        M --> N
+    end
+    
+    subgraph 生成层
+        N --> O[Prompt构建]
+        O --> P[Qwen-Turbo API]
+        P --> Q[答案生成]
+    end
+    
+    subgraph 展示层
+        Q --> R[Streamlit UI]
+        G --> R
+    end
+```
 
-## Disclaimer
+## 核心技术栈
 
-This is competition code - it's scrappy but it works. Some notes before you dive in:
+| 分类 | 技术 |
+|------|------|
+| 语言 | Python |
+| 大模型 | Qwen-Turbo (DashScope) |
+| 向量数据库 | FAISS |
+| 传统检索 | BM25 |
+| PDF解析 | docling / Mineru |
+| Web界面 | Streamlit |
+| API支持 | OpenAI, DashScope |
 
-- IBM Watson integration won't work (it was competition-specific)
-- The code might have rough edges and weird workarounds
-- No tests, minimal error handling - you've been warned
-- You'll need your own API keys for OpenAI/Gemini
-- GPU helps a lot with PDF parsing (I used 4090)
+## 处理流程
 
-If you're looking for production-ready code, this isn't it. But if you want to explore different RAG techniques and their implementations - check it out!
+### 数据准备阶段
+
+```mermaid
+flowchart LR
+    A[PDF文件] -->|pdf_parsing.py| B[结构化解析]
+    B --> C[表格提取]
+    B --> D[文本提取]
+    C -->|tables_serialization.py| E[表格序列化]
+    D -->|parsed_reports_merging.py| F[文本合并]
+    F -->|text_splitter.py| G[文本分块]
+    E --> G
+    G -->|ingestion.py| H[DashScope Embedding]
+    H --> I[FAISS向量库]
+    G -->|ingestion.py| J[BM25索引]
+```
+
+### 问答阶段
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant UI as Streamlit
+    participant QP as QuestionsProcessor
+    participant Retriever as HybridRetriever
+    participant BM25 as BM25Retriever
+    participant Vector as VectorRetriever
+    participant Reranker as LLMReranker
+    participant LLM as Qwen-Turbo
+
+    User->>UI: 输入问题
+    UI->>QP: process_questions()
+    QP->>Retriever: hybrid_retrieve(query)
+    Retriever->>BM25: retrieve(query)
+    BM25-->>Retriever: BM25结果
+    Retriever->>Vector: retrieve(query)
+    Vector-->>Retriever: 向量检索结果
+    Retriever->>Retriever: 混合排序融合
+    Retriever-->>QP: 初步候选集
+    
+    alt 启用LLM重排
+        QP->>Reranker: rerank(chunks, query)
+        Reranker->>LLM: 调用重排API
+        LLM-->>Reranker: 排序分数
+        Reranker-->>QP: 重排后的结果
+    end
+    
+    QP->>QP: 构建Prompt上下文
+    QP->>LLM: 调用问答API
+    LLM-->>QP: 生成答案
+    QP-->>UI: 返回答案
+    UI-->>User: 展示结果
+```
+
+## 核心模块说明
+
+### 文件结构
+
+```
+RAG-cy/
+├── src/
+│   ├── pipeline.py          # 主流程控制器
+│   ├── pdf_parsing.py       # PDF解析（docling）
+│   ├── pdf_mineru.py        # PDF解析（mineru）
+│   ├── text_splitter.py     # 文本分块
+│   ├── ingestion.py         # 索引构建（FAISS/BM25）
+│   ├── retrieval.py         # 检索模块
+│   ├── questions_processing.py  # 问答处理
+│   ├── prompts.py           # 提示词模板
+│   ├── reranking.py         # LLM重排
+│   └── api_requests.py      # API请求
+├── data/stock_data/
+│   ├── pdf_reports/         # 原始PDF
+│   ├── debug_data/          # 中间处理结果
+│   └── databases/           # 索引存储
+├── app_streamlit.py         # Web界面
+└── main.py                  # 命令行入口
+```
+
+### 模块功能
+
+1. **pdf_parsing.py** - 调用Docling工具对PDF年报进行结构化解析
+2. **parsed_reports_merging.py** - 将PDF解析结果规整为结构化列表，可导出为markdown
+3. **text_splitter.py** - 将报告文本按Token数分块，支持表格特殊处理
+4. **ingestion.py** - 包含BM25索引和FAISS向量库构建
+5. **retrieval.py** - 实现BM25、向量、混合等多种检索器
+6. **questions_processing.py** - 问题处理与答案生成主逻辑
+7. **reranking.py** - 基于LLM的检索结果重排序
+8. **prompts.py** - 集中定义所有LLM提示词和结构化输出Schema
+9. **api_requests.py** - 与各类大模型API交互的统一封装
+10. **pipeline.py** - 系统主流程调度模块
+
+## 执行流程
+
+```mermaid
+timeline
+    title RAG系统完整执行流程
+    section 数据准备阶段
+        "Step 1": PDF解析 (pdf_parsing.py)
+        "Step 2": 文本合并 (parsed_reports_merging.py)
+        "Step 3": 文本分块 (text_splitter.py)
+        "Step 4": 索引构建 (ingestion.py)
+    
+    section 问答阶段
+        "Step 5": 问题加载 (questions_processing.py)
+        "Step 6": 混合检索 (retrieval.py)
+        "Step 7": LLM重排 (reranking.py)
+        "Step 8": Prompt构建 (prompts.py)
+        "Step 9": LLM调用 (api_requests.py)
+        "Step 10": 结果保存
+    
+    section 交互阶段
+        "Step 11": Streamlit展示
+        "Step 12": 用户问答交互
+```
+
+## 关键配置
+
+```json
+{
+    "top_n_retrieval": 10,
+    "llm_reranking": true,
+    "llm_reranking_sample_size": 5,
+    "parent_document_retrieval": false,
+    "parallel_requests": 10,
+    "api_provider": "dashscope",
+    "answering_model": "qwen-turbo-latest"
+}
+```
+
+> **注意**：Qwen-Turbo API限流为每分钟500次调用（QPM），每分钟Token消耗不超过500,000
 
 ## Quick Start
 
-Clone and setup:
 ```bash
-git clone https://github.com/IlyaRice/RAG-Challenge-2.git
-cd RAG-Challenge-2
-python -m venv venv
-venv\Scripts\Activate.ps1  # Windows (PowerShell)
-pip install -e . -r requirements.txt
+git clone https://github.com/liangxuru/RAG-cy.git
+cd RAG-cy
+pip install -r requirements.txt
 ```
 
-Rename `env` to `.env` and add your API keys.
+重命名 `env` 为 `.env` 并添加你的 API keys。
 
-## Test Dataset
+### 运行 Streamlit 界面
 
-The repository includes two datasets:
-
-1. A small test set (in `data/test_set/`) with 5 annual reports and questions
-2. The full ERC2 competition dataset (in `data/erc2_set/`) with all competition questions and reports
-
-Each dataset directory contains its own README with specific setup instructions and available files. You can use either dataset to:
-
-- Study example questions, reports, and system outputs
-- Run the pipeline from scratch using provided PDFs
-- Use pre-processed data to skip directly to specific pipeline stages
-
-See the respective README files for detailed dataset contents and setup instructions:
-- `data/test_set/README.md` - For the small test dataset
-- `data/erc2_set/README.md` - For the full competition dataset
-
-## Usage
-
-You can run any part of pipeline by uncommenting the method you want to run in `src/pipeline.py` and executing:
 ```bash
-python .\src\pipeline.py
+streamlit run app_streamlit.py
 ```
 
-You can also run any pipeline stage using `main.py`, but you need to run it from the directory containing your data:
-```bash
-cd .\data\test_set\
-python ..\..\main.py process-questions --config max_nst_o3m
-```
+### 运行命令行
 
-### CLI Commands
-
-Get help on available commands:
 ```bash
+# 获取帮助
 python main.py --help
+
+# 解析PDF
+python main.py parse-pdfs
+
+# 处理问题
+python main.py process-questions --config max_nst_o3m
 ```
-
-Available commands:
-- `download-models` - Download required docling models
-- `parse-pdfs` - Parse PDF reports with parallel processing options
-- `serialize-tables` - Process tables in parsed reports
-- `process-reports` - Run the full pipeline on parsed reports
-- `process-questions` - Process questions using specified config
-
-Each command has its own options. For example:
-```bash
-python main.py parse-pdfs --help
-# Shows options like --parallel/--sequential, --chunk-size, --max-workers
-
-python main.py process-reports --config ser_tab
-# Process reports with serialized tables config
-```
-
-## Some configs
-
-- `max_nst_o3m` - Best performing config using OpenAI's o3-mini model
-- `ibm_llama70b` - Alternative using IBM's Llama 70B model
-- `gemini_thinking` - Full context answering with using enormous context window of Gemini. It is not RAG, actually
-
-Check `pipeline.py` for more configs and detils on them.
 
 ## License
 
