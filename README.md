@@ -6,7 +6,7 @@
 
 This repository contains the winning solution for both prize nominations in the RAG Challenge competition. The system achieved state-of-the-art results in answering questions about company annual reports using a combination of:
 
-- Custom PDF parsing with Docling
+- Custom PDF parsing with Mineru
 - Vector search with parent document retrieval
 - LLM reranking for improved context relevance
 - Structured output prompting with chain-of-thought reasoning
@@ -15,8 +15,7 @@ This repository contains the winning solution for both prize nominations in the 
 - Step1，LLM本地化（Qwen3-32B），embedding本地化（qwen3-4b）
 - Step2，mineru 对pdf进行理解 => json, .md
 - Step3，进行chunk, 转化成 embedding => faiss
-- Step4，混合召回：向量 + BM25
-- Rerank：本地化的Rerank（可选）
+- Step4，混合召回：向量 + BM25 + Rerank：本地化的Rerank（可选）
 - Step5，LLM + Relevant chunks => answer
 
 ## Disclaimer
