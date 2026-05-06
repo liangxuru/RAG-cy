@@ -1,0 +1,31 @@
+# Data files - exclude large data directories
+data/
+docs/
+.cursorindexingignore
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# FAISS database files
+*.faiss
+*.pkl
