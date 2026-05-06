@@ -12,12 +12,12 @@ This repository contains the winning solution for both prize nominations in the 
 - Structured output prompting with chain-of-thought reasoning
 - Query routing for multi-company comparisons
 
-Step1，LLM本地化（Qwen3-32B），embedding本地化（qwen3-4b）
-Step2，mineru 对pdf进行理解 => json, .md
-Step3，进行chunk, 转化成 embedding => faiss
-Step4，混合召回：向量 + BM25
-Rerank：本地化的Rerank（可选）
-Step5，LLM + Relevant chunks => answer
+- Step1，LLM本地化（Qwen3-32B），embedding本地化（qwen3-4b）
+- Step2，mineru 对pdf进行理解 => json, .md
+- Step3，进行chunk, 转化成 embedding => faiss
+- Step4，混合召回：向量 + BM25
+- Rerank：本地化的Rerank（可选）
+- Step5，LLM + Relevant chunks => answer
 
 ## Disclaimer
 
